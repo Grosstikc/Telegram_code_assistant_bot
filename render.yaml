@@ -17,3 +17,5 @@ services:
         sync: false
       - key: DB_PORT
         sync: false
+    startCommand: python -m bot.main
+    
