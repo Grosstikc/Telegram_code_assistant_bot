@@ -1,0 +1,11 @@
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore environment
+telegrambotvenv/
+
+# Ignore config files with secrets
+.env
