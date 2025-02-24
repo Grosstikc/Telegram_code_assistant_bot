@@ -1,13 +1,14 @@
 import os
+import asyncio
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
 from bot.handlers import setup_handlers
-from bot.database import init_db
+from bot.database import init_db, get_db_pool  # Our async database functions
 from bot.pomodoro import setup_pomodoro_handlers
 from bot.weather import setup_weather_handlers
 from dotenv import load_dotenv
 
-def main():
+async def main():
     """Main entry point for the bot."""
     load_dotenv()  # Load environment variables
 
@@ -15,20 +16,27 @@ def main():
     if not BOT_TOKEN:
         raise ValueError("No BOT_TOKEN found in .env file")
 
-    # Initialize the database
-    init_db()
+    # Initialize the database and connection pool
+    await init_db()
 
-    # Build the application
+    # Build the Telegram bot application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Set up all handlers
+    # Set up handlers for commands and messages
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
 
-    # Run the bot
     logger.info("Bot is running...")
-    application.run_polling()
+
+    try:
+        await application.run_polling()
+    finally:
+        # On shutdown, gracefully close the connection pool
+        pool = await get_db_pool()
+        pool.close()
+        await pool.wait_closed()
+        logger.info("Database connection pool closed.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
