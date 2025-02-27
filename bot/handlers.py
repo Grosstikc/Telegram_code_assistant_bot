@@ -4,9 +4,16 @@ from datetime import datetime, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.database import (
-    add_task_to_db, get_user_id, delete_task as db_delete_task, get_or_create_user, 
-    add_project_to_db, delete_project_from_db, get_projects_from_db, 
-    get_tasks_from_db, update_task as db_update_task, delete_task
+    add_task_to_db,
+    get_user_id,
+    delete_task as db_delete_task,
+    get_or_create_user,
+    add_project_to_db,
+    delete_project_from_db,
+    get_projects_from_db,
+    get_tasks_from_db,
+    update_task as db_update_task,
+    delete_task  # async version
 )
 from bot.reminders import daily_reminder, set_reminder, stop_reminder
 from bot.utils import logger
@@ -14,7 +21,7 @@ from bot.quotes import get_random_quote
 from bot.weather import get_weather, send_daily_weather
 
 # ---------- USER INITIALIZATION ----------
-async def initialize_user(update, context):
+async def initialize_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ensure the user is registered in the database."""
     telegram_id = update.effective_user.id
     username = update.effective_user.username
@@ -41,8 +48,7 @@ async def send_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("✨ *Extras*", callback_data="menu_extras")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    chat_id = (update.callback_query.message.chat_id 
-               if update.callback_query else update.message.chat_id)
+    chat_id = (update.callback_query.message.chat_id if update.callback_query else update.message.chat_id)
     await context.bot.send_message(chat_id, "*Main Menu:*", parse_mode="Markdown", reply_markup=reply_markup)
 
 async def send_menu_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -396,7 +402,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif next_action == 'add_task':
             task_description = update.message.text.strip()
-            user_id = update.effective_user.id
+            user_id = await get_user_id(update.effective_user.id)
             success = await add_task_to_db(user_id, task_description)
             if success:
                 await update.message.reply_text(f"✅ Task added: {task_description}")
