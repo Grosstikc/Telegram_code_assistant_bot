@@ -3,7 +3,7 @@ import asyncio
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
 from bot.handlers import setup_handlers
-from bot.database import init_db, get_db_pool  # Our async database functions
+from bot.database import init_db, get_db_pool
 from bot.pomodoro import setup_pomodoro_handlers
 from bot.weather import setup_weather_handlers
 from dotenv import load_dotenv
@@ -16,19 +16,18 @@ async def main():
     if not BOT_TOKEN:
         raise ValueError("No BOT_TOKEN found in .env file")
 
-    # Initialize the database and connection pool
+    # Initialize the database (this creates tables and sets up the connection pool)
     await init_db()
 
-    # Build the Telegram bot application
+    # Build the Telegram bot application (long polling)
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Set up handlers for commands and messages
+    # Set up all handlers
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
 
     logger.info("Bot is running...")
-
     try:
         await application.run_polling()
     finally:

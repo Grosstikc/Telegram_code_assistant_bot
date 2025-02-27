@@ -34,45 +34,46 @@ async def init_db():
     logger.info("Initializing the database.")
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    telegram_id BIGINT UNIQUE NOT NULL,
-                    username TEXT,
-                    first_name TEXT,
-                    last_name TEXT,
-                    preferences TEXT
-                )
-            """)
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS projects (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    user_id INTEGER NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS tasks (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    description TEXT NOT NULL,
-                    status TEXT DEFAULT 'pending',
-                    due_date TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS weather_preferences (
-                    user_id INTEGER PRIMARY KEY,
-                    location TEXT NOT NULL,
-                    time TEXT DEFAULT '08:00',
-                    FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
-            await conn.commit()
+        # Use a transaction block so that commit is handled automatically
+        async with conn.begin():
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        telegram_id BIGINT UNIQUE NOT NULL,
+                        username TEXT,
+                        first_name TEXT,
+                        last_name TEXT,
+                        preferences TEXT
+                    )
+                """)
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS projects (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        user_id INTEGER NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS tasks (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        description TEXT NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        due_date TEXT,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS weather_preferences (
+                        user_id INTEGER PRIMARY KEY,
+                        location TEXT NOT NULL,
+                        time TEXT DEFAULT '08:00',
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
     logger.info("Database initialized successfully.")
 
 async def get_or_create_user(telegram_id, username, first_name, last_name):
