@@ -16,7 +16,7 @@ async def main():
     if not BOT_TOKEN:
         raise ValueError("No BOT_TOKEN found in .env file")
 
-    # Initialize the database (this creates tables and sets up the connection pool)
+    # Initialize the database and connection pool
     await init_db()
 
     # Build the Telegram bot application (using long polling)
@@ -33,8 +33,7 @@ async def main():
     finally:
         # On shutdown, gracefully close the connection pool
         pool = await get_db_pool()
-        pool.close()
-        await pool.wait_closed()
+        await pool.close()
         logger.info("Database connection pool closed.")
 
 if __name__ == "__main__":
