@@ -1,5 +1,8 @@
 import os
 import asyncio
+import nest_asyncio
+nest_asyncio.apply()
+
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
 from bot.handlers import setup_handlers
@@ -16,7 +19,7 @@ async def main():
     if not BOT_TOKEN:
         raise ValueError("No BOT_TOKEN found in .env file")
 
-    # Initialize the database and connection pool
+    # Initialize the database (this creates tables and sets up the connection pool)
     await init_db()
 
     # Build the Telegram bot application (using long polling)
@@ -33,7 +36,8 @@ async def main():
     finally:
         # On shutdown, gracefully close the connection pool
         pool = await get_db_pool()
-        await pool.close()
+        pool.close()
+        await pool.wait_closed()
         logger.info("Database connection pool closed.")
 
 if __name__ == "__main__":
