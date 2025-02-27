@@ -2,7 +2,7 @@ import os
 import asyncio
 import aiopg
 import logging
-import psycopg2.extensions  # Import extensions to set autocommit
+import psycopg2  # Needed for the isolation level constant, if desired
 from bot.utils import logger
 
 logger = logging.getLogger("CodeAssistantBot")
@@ -11,7 +11,7 @@ logger = logging.getLogger("CodeAssistantBot")
 _pool = None
 
 async def init_db_pool():
-    """Initialize and return the global aiopg connection pool with autocommit enabled."""
+    """Initialize and return the global aiopg connection pool."""
     global _pool
     dsn = (
         f"dbname={os.getenv('DB_NAME')} "
@@ -20,8 +20,8 @@ async def init_db_pool():
         f"host={os.getenv('DB_HOST')} "
         f"port={os.getenv('DB_PORT')}"
     )
-    # Use psycopg2's AUTOCOMMIT isolation level instead of passing autocommit=True
-    _pool = await aiopg.create_pool(dsn, isolation_level=psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+    # Do not pass isolation_level here; we'll set autocommit on each connection after acquiring it.
+    _pool = await aiopg.create_pool(dsn)
     return _pool
 
 async def get_db_pool():
@@ -36,6 +36,8 @@ async def init_db():
     logger.info("Initializing the database.")
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        # Set autocommit on the underlying psycopg2 connection
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -80,6 +82,8 @@ async def get_or_create_user(telegram_id, username, first_name, last_name):
     """Check if a user exists, otherwise create a new one."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        # Ensure autocommit for DML operations as well
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
             user = await cur.fetchone()
@@ -96,6 +100,7 @@ async def get_user_id(telegram_id):
     """Fetch the user ID from the database based on the Telegram ID."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,))
             result = await cur.fetchone()
@@ -107,6 +112,7 @@ async def add_project_to_db(user_id: int, project_name: str, description: str = 
     """Add a new project for a user."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             try:
                 await cur.execute(
@@ -122,6 +128,7 @@ async def get_projects_from_db(user_id: int):
     """Fetch all projects for a specific user."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("SELECT name, description FROM projects WHERE user_id = %s", (user_id,))
             projects = await cur.fetchall()
@@ -131,6 +138,7 @@ async def delete_project_from_db(user_id: int, project_name: str) -> bool:
     """Delete a specific project for a user."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("DELETE FROM projects WHERE name = %s AND user_id = %s", (project_name, user_id))
             deleted = cur.rowcount > 0
@@ -140,6 +148,7 @@ async def get_tasks_from_db(user_id: int):
     """Retrieve all tasks for a specific user."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, description, status, due_date FROM tasks WHERE user_id = %s ORDER BY id ASC",
@@ -152,6 +161,7 @@ async def add_task_to_db(user_id: int, description: str, due_date: str = None) -
     """Add a new task for a user."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             try:
                 await cur.execute(
@@ -167,6 +177,7 @@ async def update_task(task_id: int, status: str) -> bool:
     """Update a task's status in the database asynchronously."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             try:
                 await cur.execute("UPDATE tasks SET status = %s WHERE id = %s", (status, task_id))
@@ -179,6 +190,7 @@ async def delete_task(task_id: int) -> bool:
     """Delete a task from the database asynchronously."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             try:
                 await cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
@@ -191,6 +203,7 @@ async def save_weather_preference(user_id, location, time='08:00'):
     """Save or update user weather preferences."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("""
                 INSERT INTO weather_preferences (user_id, location, time)
@@ -202,6 +215,7 @@ async def get_weather_preference(user_id):
     """Retrieve the user's weather preferences."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        conn._conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("SELECT location, time FROM weather_preferences WHERE user_id = %s", (user_id,))
             result = await cur.fetchone()
