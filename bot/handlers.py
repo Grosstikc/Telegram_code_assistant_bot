@@ -1,5 +1,4 @@
 import datetime
-import sqlite3
 import pytz
 from datetime import datetime, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -7,7 +6,7 @@ from telegram.ext import ContextTypes
 from bot.database import (
     add_task_to_db, get_user_id, delete_task as db_delete_task, get_or_create_user, 
     add_project_to_db, delete_project_from_db, get_projects_from_db, 
-    get_tasks_from_db, update_task as db_update_task
+    get_tasks_from_db, update_task as db_update_task, delete_task
 )
 from bot.reminders import daily_reminder, set_reminder, stop_reminder
 from bot.utils import logger
@@ -21,7 +20,7 @@ async def initialize_user(update, context):
     username = update.effective_user.username
     first_name = update.effective_user.first_name
     last_name = update.effective_user.last_name
-    get_or_create_user(telegram_id, username, first_name, last_name)    
+    await get_or_create_user(telegram_id, username, first_name, last_name)    
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command and initialize user."""
@@ -29,7 +28,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_menu(update, context)
 
 # ---------- MENU FUNCTIONS WITH ENHANCED VISUALS ----------
-
 async def send_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Display the top-level main menu.
@@ -68,8 +66,6 @@ async def send_projects_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("➕ *Add Project*", callback_data="add_project"),
          InlineKeyboardButton("📋 *Show Projects*", callback_data="show_projects")],
         [InlineKeyboardButton("🗑 *Delete Project*", callback_data="delete_project")],
-        # Extra row: Back (inline) returns to main menu in the same message,
-        # Main Menu sends a new message.
         [InlineKeyboardButton("⬅ Back", callback_data="back_inline_main"),
          InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
     ]
@@ -142,12 +138,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     try:
-        # Handle the new "back_inline_main" callback: update the current message inline with the main menu.
         if data == "back_inline_main":
             await send_menu_inline(update, context)
             return
-
-        # Navigation between menus
         if data == "back_to_main":
             await send_menu(update, context)
             return
@@ -172,15 +165,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Send the project name to add it:")
             context.user_data['next_action'] = 'add_project'
             return
-
         elif data == "delete_project":
             await query.edit_message_text("Send the project name to delete it:")
             context.user_data['next_action'] = 'delete_project'
             return
-
         elif data == "show_projects":
-            user_id = get_user_id(update.effective_user.id)
-            projects = get_projects_from_db(user_id)
+            user_id = await get_user_id(update.effective_user.id)
+            projects = await get_projects_from_db(user_id)
             if projects:
                 project_list = "\n".join([f"- {proj}" for proj in projects])
                 await query.edit_message_text(f"Your Projects:\n{project_list}")
@@ -193,38 +184,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Send the task description:")
             context.user_data['next_action'] = 'add_task'
             return
-
         elif data == "view_tasks":
-            user_id = update.effective_user.id
-            tasks = get_tasks_from_db(user_id)
+            user_id = await get_user_id(update.effective_user.id)
+            tasks = await get_tasks_from_db(user_id)
             if tasks:
                 task_list = "\n".join([f"{task[0]}. {task[1]} (Status: {task[2]})" for task in tasks])
                 await query.edit_message_text(f"📌 Your Tasks:\n{task_list}")
             else:
                 await query.edit_message_text("You have no tasks yet.")
             return
-
         elif data == "update_task":
-            user_id = update.effective_user.id
-            tasks = get_tasks_from_db(user_id)
+            user_id = await get_user_id(update.effective_user.id)
+            tasks = await get_tasks_from_db(user_id)
             if not tasks:
                 await query.edit_message_text("You have no tasks to update.")
                 return
-            # Create a submenu listing tasks to update
             keyboard = [
                 [InlineKeyboardButton(f"{task[0]}: {task[1]}", callback_data=f"update_task_{task[0]}")]
                 for task in tasks
             ]
-            # Add a row with "⬅ Back" (to Tasks Menu) and "🏠 Main Menu"
             keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="menu_tasks"),
                              InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")])
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text("Select a task to update:", reply_markup=reply_markup)
             return
-
         elif data.startswith("update_task_"):
             task_id = data.split("_")[-1]
-            # Show status options for the chosen task
             keyboard = [
                 [InlineKeyboardButton("Pending", callback_data=f"set_status_{task_id}_Pending")],
                 [InlineKeyboardButton("In Progress", callback_data=f"set_status_{task_id}_In Progress")],
@@ -235,7 +220,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text("Choose a new status:", reply_markup=reply_markup)
             return
-
         elif data.startswith("set_status_"):
             parts = data.split("_")
             task_id = int(parts[2])
@@ -246,18 +230,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text = f"✅ Task {task_id} updated to *{new_status}*."
             else:
                 text = "⚠️ Failed to update task. Please try again."
-            # Optionally, display the updated tasks list before offering navigation
-            user_id = update.effective_user.id
-            tasks = get_tasks_from_db(user_id)
+            user_id = await get_user_id(update.effective_user.id)
+            tasks = await get_tasks_from_db(user_id)
             if tasks:
                 task_list = "\n".join([f"{task[0]}. {task[1]} (Status: {task[2]})" for task in tasks])
                 text += f"\n\n📌 *Updated Tasks:*\n{task_list}"
             await send_return_to_main_menu(update, context, text)
             return
-
         elif data == "delete_task":
-            user_id = update.effective_user.id
-            tasks = get_tasks_from_db(user_id)
+            user_id = await get_user_id(update.effective_user.id)
+            tasks = await get_tasks_from_db(user_id)
             if not tasks:
                 await query.edit_message_text("You have no tasks to delete.")
                 return
@@ -270,7 +252,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text("Select a task to delete:", reply_markup=reply_markup)
             return
-
         elif data.startswith("delete_task_"):
             task_id = int(data.split("_")[-1])
             logger.info(f"Deleting task with ID: {task_id}")
@@ -279,8 +260,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text = f"🗑 Task {task_id} deleted successfully."
             else:
                 text = "⚠️ Failed to delete task. Please try again."
-            user_id = update.effective_user.id
-            tasks = get_tasks_from_db(user_id)
+            user_id = await get_user_id(update.effective_user.id)
+            tasks = await get_tasks_from_db(user_id)
             if tasks:
                 task_list = "\n".join([f"{task[0]}. {task[1]} (Status: {task[2]})" for task in tasks])
                 text += f"\n\n📌 *Updated Tasks:*\n{task_list}"
@@ -292,7 +273,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Send the time in HH:MM format to set a daily reminder:")
             context.user_data['next_action'] = 'set_reminder'
             return
-
         elif data == "stop_reminder":
             reminder_stopped = await stop_reminder(update, context)
             if reminder_stopped:
@@ -300,26 +280,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await send_return_to_main_menu(update, context, "No active reminders to stop.")
             return
-
         elif data == "motivation":
             quote = await get_random_quote(context)
             await send_return_to_main_menu(update, context, f"💡 Motivation:\n_{quote}_")
             return
-
         elif data == "weather_one_time":
             await query.edit_message_text("Send the location to get the current weather:")
             context.user_data['next_action'] = 'weather_one_time'
             return
-
         elif data == "weather_updates":
             await query.edit_message_text("Send the location and time (HH:MM) to set daily weather updates:")
             context.user_data['next_action'] = 'set_weather_updates'
             return
-
         elif data == "pomodoro_timer":
             await query.edit_message_text("🍅 Pomodoro Timer: Use /start_pomodoro to begin or /stop_pomodoro to stop.")
             return
-
         elif data == "help":
             keyboard = [
                 [InlineKeyboardButton("➕ Add Project", callback_data="add_project"),
@@ -363,8 +338,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if next_action == 'add_project':
             project_name = update.message.text.strip()
-            user_id = get_user_id(update.effective_user.id)
-            if add_project_to_db(user_id, project_name):
+            user_id = await get_user_id(update.effective_user.id)
+            if await add_project_to_db(user_id, project_name):
                 await update.message.reply_text(f"Project '{project_name}' added successfully!")
             else:
                 await update.message.reply_text(f"Project '{project_name}' already exists.")
@@ -372,8 +347,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif next_action == 'delete_project':
             project_name = update.message.text.strip()
-            user_id = get_user_id(update.effective_user.id)
-            if delete_project_from_db(user_id, project_name):
+            user_id = await get_user_id(update.effective_user.id)
+            if await delete_project_from_db(user_id, project_name):
                 await update.message.reply_text(f"Project '{project_name}' deleted successfully!")
             else:
                 await update.message.reply_text(f"Project '{project_name}' does not exist.")
@@ -422,7 +397,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif next_action == 'add_task':
             task_description = update.message.text.strip()
             user_id = update.effective_user.id
-            success = add_task_to_db(user_id, task_description)
+            success = await add_task_to_db(user_id, task_description)
             if success:
                 await update.message.reply_text(f"✅ Task added: {task_description}")
             else:
@@ -466,124 +441,102 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- COMMAND HANDLERS ----------
 async def add_project_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = get_user_id(update.effective_user.id)
+    user_id = await get_user_id(update.effective_user.id)
     if len(context.args) == 0:
         await update.message.reply_text("Usage: /add_project [project_name]")
         return
     project_name = " ".join(context.args)
-    if add_project_to_db(user_id, project_name):
+    if await add_project_to_db(user_id, project_name):
         await update.message.reply_text(f"Project '{project_name}' added!")
     else:
         await update.message.reply_text(f"Project '{project_name}' already exists.")
 
 async def delete_project_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = get_user_id(update.effective_user.id)
+    user_id = await get_user_id(update.effective_user.id)
     if len(context.args) == 0:
         await update.message.reply_text("Usage: /delete_project [project_name]")
         return
     project_name = " ".join(context.args)
-    if delete_project_from_db(user_id, project_name):
+    if await delete_project_from_db(user_id, project_name):
         await update.message.reply_text(f"Project '{project_name}' deleted!")
     else:
         await update.message.reply_text(f"Project '{project_name}' does not exist.")
 
-async def show_projects(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Display the user's projects."""
-    user_id = get_user_id(update.effective_user.id)
+    user_id = await get_user_id(update.effective_user.id)
     if not user_id:
         await update.message.reply_text("Failed to retrieve user information.")
         return
-    projects = get_projects_from_db(user_id)
+    projects = await get_projects_from_db(user_id)
     if projects:
         project_list = "\n".join([f"- {proj[0]}: {proj[1] if proj[1] else 'No description'}" for proj in projects])
         await update.message.reply_text(f"Your Projects:\n{project_list}")
     else:
         await update.message.reply_text("You have no projects yet.")
 
-async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /add_task command."""
     try:
-        user_id = update.effective_user.id
+        user_id = await get_user_id(update.effective_user.id)
         if len(context.args) < 1:
             await update.message.reply_text("Please provide a task description.")
             return
         description = " ".join(context.args)
-        add_task_to_db(user_id, description)
-        await update.message.reply_text(f"Task added: {description}")
+        success = await add_task_to_db(user_id, description)
+        if success:
+            await update.message.reply_text(f"✅ Task added: {description}")
+        else:
+            await update.message.reply_text(f"❌ Failed to add task: {description}")
     except Exception as e:
-        logger.error(f"Error in add_task: {e}")
+        logger.error(f"Error in add_task_command: {e}")
         await update.message.reply_text("An error occurred while adding the task.")
 
-async def view_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def view_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /view_tasks command."""
     try:
-        user_id = update.effective_user.id
-        tasks = get_tasks_from_db(user_id)
+        user_id = await get_user_id(update.effective_user.id)
+        tasks = await get_tasks_from_db(user_id)
         if not tasks:
             await update.message.reply_text("You have no tasks!")
         else:
             task_list = "\n".join([f"{task[0]}. {task[1]} (Status: {task[2]}, Due: {task[3] or 'No due date'})" for task in tasks])
             await update.message.reply_text(f"Your tasks:\n{task_list}")
     except Exception as e:
-        logger.error(f"Error in view_tasks: {e}")
+        logger.error(f"Error in view_tasks_command: {e}")
         await update.message.reply_text("An error occurred while retrieving tasks.")
 
-async def update_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def update_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /update_task command."""
     try:
         if len(context.args) < 2:
             await update.message.reply_text("Usage: /update_task [task_id] [new_status]")
             return
-        task_id = context.args[0]
+        task_id = int(context.args[0])
         new_status = context.args[1]
-        user_id = update.effective_user.id
-        conn = sqlite3.connect("projects.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE tasks
-            SET status = ?
-            WHERE id = ? AND user_id = ?
-            """,
-            (new_status, task_id, user_id),
-        )
-        conn.commit()
-        updated_count = cursor.rowcount
-        conn.close()
-        if updated_count > 0:
+        success = await db_update_task(task_id, new_status)
+        if success:
             await update.message.reply_text(f"Task {task_id} updated to status: {new_status}.")
         else:
             await update.message.reply_text("Failed to update task. Check task ID.")
     except Exception as e:
-        logger.error(f"Error in update_task: {e}")
+        logger.error(f"Error in update_task_command: {e}")
         await update.message.reply_text("An error occurred while updating the task.")
 
-async def delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /delete_task command."""
     try:
         if len(context.args) < 1:
             await update.message.reply_text("Usage: /delete_task [task_id]")
             return
-        task_id = context.args[0]
-        user_id = update.effective_user.id
-        conn = sqlite3.connect("projects.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            DELETE FROM tasks
-            WHERE id = ? AND user_id = ?
-            """,
-            (task_id, user_id),
-        )
-        conn.commit()
-        deleted_count = cursor.rowcount
-        conn.close()
-        if deleted_count > 0:
+        task_id = int(context.args[0])
+        success = await delete_task(task_id)
+        if success:
             await update.message.reply_text(f"Task {task_id} deleted successfully.")
         else:
             await update.message.reply_text("Failed to delete task. Check task ID.")
     except Exception as e:
-        logger.error(f"Error in delete_task: {e}")
+        logger.error(f"Error in delete_task_command: {e}")
         await update.message.reply_text("An error occurred while deleting the task.")
 
 def setup_handlers(application):
@@ -595,15 +548,15 @@ def setup_handlers(application):
     # Command Handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("add_project", add_project_command))  
-    application.add_handler(CommandHandler("delete_project", delete_project_command))  
-    application.add_handler(CommandHandler("show_projects", show_projects))
+    application.add_handler(CommandHandler("add_project", add_project_command))
+    application.add_handler(CommandHandler("delete_project", delete_project_command))
+    application.add_handler(CommandHandler("show_projects", show_projects_command))
     application.add_handler(CommandHandler("set_reminder", set_reminder))
     application.add_handler(CommandHandler("stop_reminder", stop_reminder))
     application.add_handler(CommandHandler("motivation", get_random_quote))
-    application.add_handler(CommandHandler("add_task", add_task))
-    application.add_handler(CommandHandler("view_tasks", view_tasks))
-    application.add_handler(CommandHandler("update_task", update_task))
-    application.add_handler(CommandHandler("delete_task", delete_task))
+    application.add_handler(CommandHandler("add_task", add_task_command))
+    application.add_handler(CommandHandler("view_tasks", view_tasks_command))
+    application.add_handler(CommandHandler("update_task", update_task_command))
+    application.add_handler(CommandHandler("delete_task", delete_task_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
