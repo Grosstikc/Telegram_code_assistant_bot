@@ -2,6 +2,7 @@ import os
 import asyncio
 import aiopg
 import logging
+import psycopg2.extensions  # Import extensions to set autocommit
 from bot.utils import logger
 
 logger = logging.getLogger("CodeAssistantBot")
@@ -19,8 +20,8 @@ async def init_db_pool():
         f"host={os.getenv('DB_HOST')} "
         f"port={os.getenv('DB_PORT')}"
     )
-    # Set autocommit=True at pool creation so each connection automatically commits changes.
-    _pool = await aiopg.create_pool(dsn, autocommit=True)
+    # Use psycopg2's AUTOCOMMIT isolation level instead of passing autocommit=True
+    _pool = await aiopg.create_pool(dsn, isolation_level=psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
     return _pool
 
 async def get_db_pool():
