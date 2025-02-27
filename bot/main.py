@@ -22,7 +22,7 @@ async def main():
     # Build the Telegram bot application (using long polling)
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Set up all handlers
+    # Set up handlers
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
