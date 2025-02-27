@@ -34,6 +34,8 @@ async def init_db():
     logger.info("Initializing the database.")
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        # Set autocommit so that changes are applied immediately without explicit commit
+        conn.autocommit = True
         async with conn.cursor() as cur:
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -72,7 +74,6 @@ async def init_db():
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             """)
-            await conn.commit()
     logger.info("Database initialized successfully.")
 
 async def get_or_create_user(telegram_id, username, first_name, last_name):
