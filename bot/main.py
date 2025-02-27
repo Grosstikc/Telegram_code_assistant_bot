@@ -19,7 +19,7 @@ async def main():
     # Initialize the database (this creates tables and sets up the connection pool)
     await init_db()
 
-    # Build the Telegram bot application (long polling)
+    # Build the Telegram bot application (using long polling)
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Set up all handlers
