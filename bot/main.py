@@ -1,7 +1,7 @@
 import os
 import asyncio
 import nest_asyncio
-nest_asyncio.apply()  # Optional: Remove in production if not needed
+nest_asyncio.apply()  # Remove this if not needed in production
 
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
@@ -11,10 +11,10 @@ from bot.pomodoro import setup_pomodoro_handlers
 from bot.weather import setup_weather_handlers
 from dotenv import load_dotenv
 
-# Post-shutdown callback to close the DB pool gracefully
+# Define a shutdown callback for the DB pool
 async def shutdown_db_pool(app):
     pool = await get_db_pool()
-    await pool.close()  # Await the close() coroutine if needed
+    await pool.close()  # Await close() if it's a coroutine
     logger.info("Database connection pool closed.")
 
 async def main():
@@ -31,17 +31,16 @@ async def main():
     # Build the Telegram bot application (using long polling)
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Register handlers and error handler
+    # Set up handlers and error handler
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
     application.add_error_handler(error_handler)
-    application.post_shutdown.append(shutdown_db_pool)
 
     logger.info("Bot is running...")
-    await asyncio.sleep(3)  # Short delay to allow any lingering sessions to end
+    await asyncio.sleep(3)  # Delay to allow any lingering polling session to end
 
-    # Run polling (this call blocks until shutdown)
+    # Run polling and register the shutdown callback via the post_shutdown parameter
     await application.run_polling(post_shutdown=[shutdown_db_pool])
 
 if __name__ == "__main__":
