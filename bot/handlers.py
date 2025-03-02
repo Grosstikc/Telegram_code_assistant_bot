@@ -22,13 +22,13 @@ from bot.quotes import get_random_quote
 from bot.weather import get_weather, send_daily_weather
 
 async def error_handler(update: object, context: CallbackContext) -> None:
-    """Log Errors caused by Updates."""
+    # Check if the error is a Conflict error
     if isinstance(context.error, Conflict):
-        # Log and ignore errors
-        context.application.logger.warning("Conflict error (getUpdates): ignoring.")
+        logger.warning("Conflict error (getUpdates): ignoring.", exc_info=context.error)
         return
-    context.application.logger.error("Unhandled exception:", exc_info=context.error)
-
+    # Log other errors
+    logger.error("Unhandled exception:", exc_info=context.error)
+    
 # ---------- USER INITIALIZATION ----------
 async def initialize_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ensure the user is registered in the database."""

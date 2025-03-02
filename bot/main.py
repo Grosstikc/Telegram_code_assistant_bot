@@ -1,8 +1,5 @@
 import os
 import asyncio
-import nest_asyncio
-nest_asyncio.apply()
-
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
 from bot.handlers import error_handler, setup_handlers
