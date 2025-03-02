@@ -5,7 +5,7 @@ nest_asyncio.apply()
 
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
-from bot.handlers import setup_handlers
+from bot.handlers import error_handler, setup_handlers
 from bot.database import init_db, get_db_pool
 from bot.pomodoro import setup_pomodoro_handlers
 from bot.weather import setup_weather_handlers
@@ -29,6 +29,7 @@ async def main():
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
+    application.add_error_handler(error_handler)
 
     logger.info("Bot is running...")
     try:
@@ -37,7 +38,7 @@ async def main():
         # On shutdown, gracefully close the connection pool
         pool = await get_db_pool()
         pool.close()
-        await pool.wait_closed()
+        # await pool.wait_closed()
         logger.info("Database connection pool closed.")
 
 if __name__ == "__main__":
