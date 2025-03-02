@@ -1,7 +1,8 @@
 import os
 import asyncio
-import nest_asyncio
-nest_asyncio.apply()  # Remove this if not needed in production
+# Remove nest_asyncio for production if possible:
+# import nest_asyncio
+# nest_asyncio.apply()
 
 from telegram.ext import ApplicationBuilder
 from bot.utils import logger
@@ -10,12 +11,6 @@ from bot.database import init_db, get_db_pool
 from bot.pomodoro import setup_pomodoro_handlers
 from bot.weather import setup_weather_handlers
 from dotenv import load_dotenv
-
-# Define a shutdown callback for the DB pool
-async def shutdown_db_pool(app):
-    pool = await get_db_pool()
-    await pool.close()  # Await close() if it's a coroutine
-    logger.info("Database connection pool closed.")
 
 async def main():
     """Main entry point for the bot."""
@@ -31,17 +26,25 @@ async def main():
     # Build the Telegram bot application (using long polling)
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Set up handlers and error handler
+    # Register your handlers and error handler
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
     application.add_error_handler(error_handler)
 
     logger.info("Bot is running...")
-    await asyncio.sleep(3)  # Delay to allow any lingering polling session to end
+    # Optional: delay startup to help clear any lingering polling sessions
+    await asyncio.sleep(3)
 
-    # Run polling and register the shutdown callback via the post_shutdown parameter
-    await application.run_polling(post_shutdown=[shutdown_db_pool])
+    # Start polling; note we do not pass a post_shutdown parameter.
+    await application.run_polling()
+
+    # After run_polling() exits, gracefully close the DB pool
+    pool = await get_db_pool()
+    await pool.close()  # Ensure close() is awaited if it is a coroutine
+    logger.info("Database connection pool closed.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Instead of asyncio.run(), use the loop directly to avoid issues with loop closure.
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
