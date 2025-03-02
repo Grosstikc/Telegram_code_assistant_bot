@@ -1,6 +1,7 @@
 import datetime
 import pytz
 from datetime import datetime, time
+from telegram.error import Conflict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackContext
 from bot.database import (
@@ -22,7 +23,11 @@ from bot.weather import get_weather, send_daily_weather
 
 async def error_handler(update: object, context: CallbackContext) -> None:
     """Log Errors caused by Updates."""
-    logger.error("Exiption while handling an update:", exc_info=context.error)
+    if isinstance(context.error, Conflict):
+        # Log and ignore errors
+        context.application.logger.warning("Conflict error (getUpdates): ignoring.")
+        return
+    context.application.logger.error("Unhandled exception:", exc_info=context.error)
 
 # ---------- USER INITIALIZATION ----------
 async def initialize_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -568,6 +573,5 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("view_tasks", view_tasks_command))
     application.add_handler(CommandHandler("update_task", update_task_command))
     application.add_handler(CommandHandler("delete_task", delete_task_command))
-    application.add_error_handler(error_handler)
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

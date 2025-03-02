@@ -32,6 +32,7 @@ async def main():
     application.add_error_handler(error_handler)
 
     logger.info("Bot is running...")
+    await asyncio.sleep(3)
     try:
         await application.run_polling()
     finally:
