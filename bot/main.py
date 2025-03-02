@@ -42,7 +42,7 @@ async def main():
     await asyncio.sleep(3)  # Short delay to allow any lingering sessions to end
 
     # Run polling (this call blocks until shutdown)
-    await application.run_polling()
+    await application.run_polling(post_shutdown=[shutdown_db_pool])
 
 if __name__ == "__main__":
     asyncio.run(main())
