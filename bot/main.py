@@ -36,7 +36,7 @@ async def main():
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
     application.add_error_handler(error_handler)
-    application.add_post_shutdown(shutdown_db_pool)
+    application.post_shutdown.append(shutdown_db_pool)
 
     logger.info("Bot is running...")
     await asyncio.sleep(3)  # Short delay to allow any lingering sessions to end
