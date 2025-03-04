@@ -33,7 +33,11 @@ def main():
     # Build the Telegram bot application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    # Register your handlers and the error handler
+    # Delete any existing webhook (to avoid conflicts with polling)
+    loop.run_until_complete(application.bot.delete_webhook())
+    logger.info("Existing webhook deleted.")
+    
+    # Register your handlers and error handler
     setup_handlers(application)
     setup_pomodoro_handlers(application)
     setup_weather_handlers(application)
@@ -42,11 +46,10 @@ def main():
     logger.info("Bot is running...")
     
     try:
-        # run_polling() is a synchronous call that will manage its own loop,
-        # but it requires that a current event loop is set in the main thread.
+        # Run polling; run_polling() will manage its own event loop internally.
         application.run_polling()
     finally:
-        # When polling stops, gracefully close the database pool.
+        # When polling stops, gracefully close the DB pool
         loop.run_until_complete(close_db_pool())
         logger.info("Database connection pool closed.")
 
