@@ -29,10 +29,10 @@ async def main():
     application.add_error_handler(error_handler)
 
     logger.info("Bot is running...")
-    # Optional: a short delay to allow any lingering sessions to clear
+    # Optional: Delay a few seconds to allow any previous polling sessions to clear
     await asyncio.sleep(3)
 
-    # Run polling (this call blocks until the bot is stopped)
+    # Start polling (this call blocks until the bot is stopped)
     await application.run_polling()
 
     # After polling stops, gracefully close the DB pool
@@ -41,14 +41,4 @@ async def main():
     logger.info("Database connection pool closed.")
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        # If the loop is already running (as may happen in some managed environments),
-        # schedule main() on the current loop and run forever.
-        if "already running" in str(e):
-            loop = asyncio.get_event_loop()
-            loop.create_task(main())
-            loop.run_forever()
-        else:
-            raise
+    asyncio.run(main())
