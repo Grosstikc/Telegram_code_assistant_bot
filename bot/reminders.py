@@ -6,21 +6,15 @@ logger = logging.getLogger("CodeAssistantBot")
 
 
 async def set_reminder(update, context):
-    """Set a daily reminder in UTC."""
     try:
-        # Parse the time input by the user in HH:MM format
+        # Parse the time input by the user in HH:MM format.
+        # Assume the user enters time in UTC.
         user_time = datetime.strptime(update.message.text.strip(), "%H:%M").time()
 
-        # Convert the user's time to UTC
-        user_timezone = pytz.timezone("Etc/UTC")  # Adjust if users specify a different time zone
-        local_datetime = datetime.combine(datetime.now(), user_time)
-        utc_datetime = local_datetime.astimezone(pytz.UTC)
-        utc_time = utc_datetime.time()
-
-        # Schedule the reminder in UTC
+        # Schedule the reminder at the exact time provided (in UTC)
         context.job_queue.run_daily(
             daily_reminder,
-            time=utc_time,
+            time=user_time,
             chat_id=update.effective_chat.id,
             name=str(update.effective_chat.id),
         )
@@ -31,7 +25,6 @@ async def set_reminder(update, context):
         logger.error(f"Error in set_reminder: {e}")
         await update.message.reply_text("An error occurred while setting the reminder.")
 
-
 async def daily_reminder(context):
     """Send a daily reminder message."""
     try:
@@ -41,7 +34,6 @@ async def daily_reminder(context):
         )
     except Exception as e:
         logger.error(f"Error in daily_reminder: {e}")
-
 
 async def stop_reminder(update, context):
     """Stop a daily reminder."""
